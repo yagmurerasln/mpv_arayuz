@@ -49,7 +49,7 @@ if ! command -v whiptail &> /dev/null; then
     MISSING_PACKAGES="$MISSING_PACKAGES whiptail"
 fi
 
-# Eksik paketleri yükle
+# Eksik paketler
 if [ -n "$MISSING_PACKAGES" ]; then
     echo "📥 Eksik paketler yükleniyor:$MISSING_PACKAGES"
     echo ""
@@ -70,19 +70,19 @@ fi
 echo ""
 echo "🔧 Scriptler yapılandırılıyor..."
 
-# Çalıştırma izinlerini ver
-if [ -f "mp3player-gui.sh" ]; then
-    chmod +x mp3player-gui.sh
-    echo "✅ mp3player-gui.sh çalıştırılabilir yapıldı"
+# Çalıştırma izinleri
+if [ -f "gui.sh" ]; then
+    chmod +x gui.sh
+    echo "✅ gui.sh çalıştırılabilir yapıldı"
 else
-    echo "⚠️  mp3player-gui.sh bulunamadı!"
+    echo "⚠️  gui.sh bulunamadı!"
 fi
 
-if [ -f "mp3player-tui.sh" ]; then
-    chmod +x mp3player-tui.sh
-    echo "✅ mp3player-tui.sh çalıştırılabilir yapıldı"
+if [ -f "tui.sh" ]; then
+    chmod +x tui.sh
+    echo "✅ tui.sh çalıştırılabilir yapıldı"
 else
-    echo "⚠️  mp3player-tui.sh bulunamadı!"
+    echo "⚠️ tui.sh bulunamadı!"
 fi
 
 echo ""
@@ -117,15 +117,10 @@ echo ""
 echo "📖 Kullanım:"
 echo ""
 echo "   GUI versiyonu için:"
-echo "   ./mp3player-gui.sh"
+echo "   ./gui.sh"
 echo ""
 echo "   TUI versiyonu için:"
-echo "   ./mp3player-tui.sh"
-echo ""
-echo "💡 İpucu: Masaüstü kısayolu oluşturmak isterseniz:"
-echo "   Uygulama menüsüne sağ tıklayıp 'Menüyü Düzenle' seçeneğini kullanabilirsiniz."
-echo ""
-echo "🎉 İyi eğlenceler!"
+echo "   ./tui.sh"
 echo ""
 
 # Kullanıcıya seçenek sun
@@ -135,7 +130,7 @@ case "$choice" in
         echo ""
         echo "🚀 GUI başlatılıyor..."
         sleep 1
-        ./mp3player-gui.sh
+        ./gui.sh
         ;;
     *)
         echo "👋 Kurulum tamamlandı. İyi günler!"
