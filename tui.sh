@@ -1,268 +1,286 @@
 #!/bin/bash
-
 #############################################
-# MP3 PLAYER - TUI (Whiptail) Versiyonu
-# Pardus Linux için mpg123 ön yüzü
-# Geliştirici: [İsminiz]
-# Tarih: Ocak 2026
+# MP3 PLAYER - TUI (Whiptail)
+# GUI (YAD) ile birebir mantık
 #############################################
 
-# Gerekli komutların kontrolü
-check_dependencies() {
-    local missing=""
-    
-    if ! command -v whiptail &> /dev/null; then
-        missing="${missing}whiptail "
-    fi
-    
-    if ! command -v mpg123 &> /dev/null; then
-        missing="${missing}mpg123 "
-    fi
-    
-    if [ -n "$missing" ]; then
-        echo "HATA: Eksik bağımlılıklar: $missing"
-        echo "Kurulum için: sudo apt install $missing"
-        exit 1
-    fi
-}
+# ============== DEPENDENCY CHECK ==============
+command -v whiptail >/dev/null || { echo "whiptail yok"; exit 1; }
+command -v mpv >/dev/null || { echo "mpv yok"; exit 1; }
 
-# Global değişkenler
-CURRENT_PLAYLIST="/tmp/mp3player_tui_playlist_$$.txt"
-CURRENT_DIR="$HOME"
-MPG123_PID=""
+# ============== GLOBAL ========================
+PLAYLIST="/tmp/mp3_tui_playlist_$$.txt"
+PLAYER_PID=""
+CURRENT_INDEX=1
+PAUSED=0
 
-# Temizlik işlemi
+DESKTOP="$HOME/Desktop"
+[ ! -d "$DESKTOP" ] && DESKTOP="$HOME/Masaüstü"
+
 cleanup() {
-    if [ -n "$MPG123_PID" ]; then
-        kill $MPG123_PID 2>/dev/null
-    fi
-    rm -f "$CURRENT_PLAYLIST"
+    kill "$PLAYER_PID" 2>/dev/null
+    rm -f "$PLAYLIST"
     clear
 }
-
 trap cleanup EXIT
 
-# Dosya tarayıcısı fonksiyonu
-file_browser() {
-    local current_dir="${1:-$HOME}"
-    local title="$2"
-    
+# ============== FILE PICKER ===================
+pick_file() {
+    local current_dir="$HOME"
+
     while true; do
-        # Dizindeki dosya ve klasörleri listele
-        local items=()
-        
-        # Üst dizin seçeneği
-        if [ "$current_dir" != "/" ]; then
-            items+=(".." "Üst Dizin")
-        fi
-        
-        # Klasörleri ekle
-        while IFS= read -r dir; do
-            [ -z "$dir" ] && continue
-            items+=("$(basename "$dir")" "[KLS]")
-        done < <(find "$current_dir" -maxdepth 1 -type d ! -path "$current_dir" 2>/dev/null | sort)
-        
-        # Müzik dosyalarını ekle
-        while IFS= read -r file; do
-            [ -z "$file" ] && continue
-            items+=("$(basename "$file")" "[MP3]")
-        done < <(find "$current_dir" -maxdepth 1 -type f \( -iname "*.mp3" -o -iname "*.ogg" -o -iname "*.wav" \) 2>/dev/null | sort)
-        
-        if [ ${#items[@]} -eq 0 ]; then
-            whiptail --msgbox "Bu klasörde dosya bulunamadı!" 8 50
-            return 1
-        fi
-        
-        local selection
-        selection=$(whiptail --title "$title" \
-            --menu "Dizin: $current_dir\n\nSeçim yapın:" \
-            20 70 12 \
-            "${items[@]}" \
+        local menu=()
+
+        # Üst dizin
+        menu+=(".." "[Dizin Yukarı]")
+
+        # Klasörler (SADECE basename)
+        while IFS= read -r d; do
+            base="$(basename "$d")"
+            menu+=("$base/" "[Klasör]")
+        done < <(
+            find "$current_dir" -maxdepth 1 -type d ! -path "$current_dir" 2>/dev/null | sort
+        )
+
+        # Müzik dosyaları
+        while IFS= read -r f; do
+            base="$(basename "$f")"
+            menu+=("$base" "[Müzik]")
+        done < <(
+            find "$current_dir" -maxdepth 1 -type f \
+            \( -iname "*.mp3" -o -iname "*.m4a" -o -iname "*.ogg" -o -iname "*.wav" \) \
+            2>/dev/null | sort
+        )
+
+        choice=$(whiptail --title "Şarkı Seç" \
+            --menu "Dizin: $current_dir" 20 80 15 \
+            "${menu[@]}" \
             3>&1 1>&2 2>&3)
-        
-        if [ $? -ne 0 ]; then
-            return 1
+
+        ret=$?
+        [ "$ret" -ne 0 ] && return 1
+
+        # Yukarı çık
+        if [ "$choice" = ".." ]; then
+            current_dir="$(dirname "$current_dir")"
+            continue
         fi
-        
-        if [ "$selection" = ".." ]; then
-            current_dir=$(dirname "$current_dir")
-        elif [ -d "$current_dir/$selection" ]; then
-            current_dir="$current_dir/$selection"
-        else
-            # Dosya seçildi
-            echo "$current_dir/$selection"
+
+        # Klasör mü?
+        if [[ "$choice" == */ ]]; then
+            current_dir="$current_dir/${choice%/}"
+            continue
+        fi
+
+        # Dosya seçildi
+        if [ -f "$current_dir/$choice" ]; then
+            echo "$current_dir/$choice"
             return 0
         fi
     done
 }
 
-# Çalma listesi oluşturma
-create_playlist() {
-    local choice
-    choice=$(whiptail --title "Çalma Listesi Oluştur" \
-        --menu "Yöntem seçin:" 15 60 3 \
-        "1" "Klasör Seç (tüm müzikler)" \
-        "2" "Tek Dosya Ekle" \
-        "3" "İptal" \
-        3>&1 1>&2 2>&3)
-    
-    case "$choice" in
-        1)
-            # Klasör seçimi
-            local folder
-            folder=$(file_browser "$HOME" "Müzik Klasörü Seçin")
-            if [ -n "$folder" ] && [ -d "$folder" ]; then
-                find "$folder" -type f \( -iname "*.mp3" -o -iname "*.ogg" -o -iname "*.wav" \) > "$CURRENT_PLAYLIST" 2>/dev/null
-                local count=$(wc -l < "$CURRENT_PLAYLIST")
-                whiptail --msgbox "$count adet müzik dosyası eklendi!" 8 50
-                return 0
-            else
-                whiptail --msgbox "Geçersiz klasör!" 8 40
-                return 1
-            fi
-            ;;
-        2)
-            # Tek dosya ekleme
-            > "$CURRENT_PLAYLIST"  # Listeyi temizle
-            while true; do
-                local file
-                file=$(file_browser "$CURRENT_DIR" "Müzik Dosyası Seçin")
-                if [ -n "$file" ] && [ -f "$file" ]; then
-                    echo "$file" >> "$CURRENT_PLAYLIST"
-                    CURRENT_DIR=$(dirname "$file")
-                    
-                    if ! whiptail --yesno "Dosya eklendi!\n\nBaşka dosya eklemek ister misiniz?" 10 50; then
-                        break
-                    fi
-                else
-                    break
-                fi
-            done
-            
-            local count=$(wc -l < "$CURRENT_PLAYLIST" 2>/dev/null || echo 0)
-            if [ "$count" -gt 0 ]; then
-                whiptail --msgbox "$count adet dosya eklendi!" 8 50
-                return 0
-            else
-                whiptail --msgbox "Hiç dosya eklenmedi!" 8 40
-                return 1
-            fi
-            ;;
-        *)
-            return 1
-            ;;
-    esac
-}
+pick_folder() {
+    local current_dir="$HOME"
 
-# Tek dosya çalma
-play_single_file() {
-    local file
-    file=$(file_browser "$CURRENT_DIR" "Çalınacak Müzik Dosyasını Seçin")
-    
-    if [ -n "$file" ] && [ -f "$file" ]; then
-        CURRENT_DIR=$(dirname "$file")
-        whiptail --title "Şimdi Çalıyor" \
-            --infobox "$(basename "$file")\n\nÇalıyor... (CTRL+C ile durdurun)" 8 60
-        mpg123 -q "$file"
-        sleep 1
-    else
-        whiptail --msgbox "Dosya seçilmedi!" 8 40
-    fi
-}
-
-# Çalma listesini çalma
-play_playlist() {
-    if [ ! -f "$CURRENT_PLAYLIST" ] || [ ! -s "$CURRENT_PLAYLIST" ]; then
-        whiptail --msgbox "Önce bir çalma listesi oluşturun!" 8 50
-        return 1
-    fi
-    
-    local total=$(wc -l < "$CURRENT_PLAYLIST")
-    local current=0
-    
-    while IFS= read -r file; do
-        ((current++))
-        
-        whiptail --title "Çalıyor ($current/$total)" \
-            --infobox "$(basename "$file")\n\nDosya: $file\n\n(CTRL+C ile durdurun)" 10 70
-        
-        mpg123 -q "$file"
-        
-    done < "$CURRENT_PLAYLIST"
-    
-    whiptail --msgbox "Çalma listesi tamamlandı!" 8 40
-}
-
-# Çalma listesini göster
-show_playlist() {
-    if [ ! -f "$CURRENT_PLAYLIST" ] || [ ! -s "$CURRENT_PLAYLIST" ]; then
-        whiptail --msgbox "Henüz bir çalma listesi yok!" 8 50
-        return 1
-    fi
-    
-    local content=""
-    local index=1
-    
-    while IFS= read -r file; do
-        content="${content}${index}. $(basename "$file")\n"
-        ((index++))
-    done < "$CURRENT_PLAYLIST"
-    
-    whiptail --title "Çalma Listesi ($(($index - 1)) dosya)" \
-        --msgbox "$content" 20 70
-}
-
-# Hakkında
-show_about() {
-    whiptail --title "Hakkında" --msgbox \
-        "MP3 Player TUI\n\nPardus Linux için mpg123 ön yüzü\n\nShell Script ile geliştirilmiştir.\nWhiptail kullanılarak oluşturulmuştur.\n\n© 2026" \
-        15 50
-}
-
-# Ana menü
-main_menu() {
     while true; do
-        local choice
-        choice=$(whiptail --title "MP3 Player - Ana Menü" \
-            --menu "Bir işlem seçin:" 18 60 7 \
-            "1" "Tek Dosya Çal" \
-            "2" "Çalma Listesi Oluştur" \
-            "3" "Çalma Listesini Çal" \
-            "4" "Çalma Listesini Göster" \
-            "5" "Hakkında" \
-            "6" "Çıkış" \
+        local menu=()
+
+        # ✅ Bu klasörü seç
+        menu+=("__SELECT__" "✅ BU KLASÖRÜ SEÇ")
+
+        # Yukarı çık
+        menu+=(".." "[Dizin Yukarı]")
+
+        # Alt klasörler
+        while IFS= read -r d; do
+            base="$(basename "$d")"
+            menu+=("$base/" "[Klasör]")
+        done < <(
+            find "$current_dir" -maxdepth 1 -type d ! -path "$current_dir" 2>/dev/null | sort
+        )
+
+        choice=$(whiptail --title "Klasör Seç" \
+            --menu "Dizin: $current_dir" 20 80 15 \
+            "${menu[@]}" \
             3>&1 1>&2 2>&3)
-        
-        if [ $? -ne 0 ]; then
-            break
+
+        ret=$?
+        [ "$ret" -ne 0 ] && return 1
+
+        # ✅ Bu klasörü seç
+        if [ "$choice" = "__SELECT__" ]; then
+            echo "$current_dir"
+            return 0
         fi
-        
-        case "$choice" in
-            1)
-                play_single_file
-                ;;
-            2)
-                create_playlist
-                ;;
-            3)
-                play_playlist
-                ;;
-            4)
-                show_playlist
-                ;;
-            5)
-                show_about
-                ;;
-            6)
-                break
-                ;;
-        esac
+
+        # Yukarı
+        if [ "$choice" = ".." ]; then
+            current_dir="$(dirname "$current_dir")"
+            continue
+        fi
+
+        # Alt klasöre gir
+        if [[ "$choice" == */ ]]; then
+            current_dir="$current_dir/${choice%/}"
+            continue
+        fi
     done
 }
 
-# Program başlangıcı
-check_dependencies
-main_menu
-cleanup
 
-exit 0
+
+# ============== PLAYLIST ======================
+create_playlist() {
+    > "$PLAYLIST"
+
+    choice=$(whiptail --menu "Playlist Oluştur" 15 60 2 \
+        "1" "Tek tek şarkı seç" \
+        "2" "Klasör seç " \
+        3>&1 1>&2 2>&3)
+
+    [ $? -ne 0 ] && return
+
+    case "$choice" in
+        1)
+            while true; do
+                file=$(pick_file) || break
+                echo "$file" >> "$PLAYLIST"
+                whiptail --yesno "Başka şarkı ekle?" 8 40 || break
+            done
+            ;;
+        2)
+            folder=$(pick_folder) || return
+            find "$folder" -type f \
+                \( -iname "*.mp3" -o -iname "*.m4a" -o -iname "*.ogg" -o -iname "*.wav" \) \
+                >> "$PLAYLIST"
+            ;;
+    esac
+
+    [ ! -s "$PLAYLIST" ] && whiptail --msgbox "Liste boş!" 8 30
+}
+
+
+# ============== PLAYER CORE ===================
+play_song() {
+    mpv --no-video --quiet "$1" &
+    PLAYER_PID=$!
+    PAUSED=0
+}
+
+pause_music() {
+    kill -SIGSTOP "$PLAYER_PID" 2>/dev/null
+    PAUSED=1
+}
+
+resume_music() {
+    kill -SIGCONT "$PLAYER_PID" 2>/dev/null
+    PAUSED=0
+}
+
+stop_music() {
+    kill "$PLAYER_PID" 2>/dev/null
+    wait "$PLAYER_PID" 2>/dev/null
+    PLAYER_PID=""
+}
+
+# ============== PLAY PLAYLIST =================
+play_playlist() {
+    [ ! -s "$PLAYLIST" ] && {
+        whiptail --msgbox "Önce playlist oluştur" 8 40
+        return
+    }
+
+    mapfile -t SONGS < "$PLAYLIST"
+    total=${#SONGS[@]}
+    CURRENT_INDEX=1
+
+    while true; do
+        song="${SONGS[$((CURRENT_INDEX-1))]}"
+        title="$(basename "$song")"
+
+        mpv --no-video --quiet --really-quiet \
+            --msg-level=all=no \
+            "$song" >/dev/null 2>&1 &
+        PLAYER_PID=$!
+        PAUSED=0
+
+        while true; do
+            # 🎯 ŞARKI BİTTİ Mİ? → OTOMATİK GEÇ
+            if ! kill -0 "$PLAYER_PID" 2>/dev/null; then
+                PLAYER_PID=""
+                break
+            fi
+
+            STATUS="▶️ ÇALIYOR"
+            [ "$PAUSED" -eq 1 ] && STATUS="⏸ DURAKLATILDI"
+
+            choice=$(whiptail --title "MP3 Player ($CURRENT_INDEX/$total)" \
+  --menu "$STATUS\n\n$title" 15 60 4 \
+  "1" "⏭ Sonraki" \
+  "2" "⏸ Duraklat" \
+  "3" "▶️ Devam" \
+  "4" "❌ Çıkış" \
+  3>&1 1>&2 2>&3)
+
+ret=$?
+
+# ⛔ İPTAL / ESC
+if [ "$ret" -ne 0 ]; then
+    kill "$PLAYER_PID" 2>/dev/null
+    return
+fi
+
+case "$choice" in
+    1)
+        kill "$PLAYER_PID" 2>/dev/null
+        PLAYER_PID=""
+        break
+        ;;
+    2)
+        kill -SIGSTOP "$PLAYER_PID" 2>/dev/null
+        PAUSED=1
+        ;;
+    3)
+        kill -SIGCONT "$PLAYER_PID" 2>/dev/null
+        PAUSED=0
+        ;;
+    4)
+        kill "$PLAYER_PID" 2>/dev/null
+        return
+        ;;
+esac
+
+        done
+
+        # 🎯 OTOMATİK NEXT
+        ((CURRENT_INDEX++))
+        [ "$CURRENT_INDEX" -gt "$total" ] && CURRENT_INDEX=1
+    done
+}
+
+
+
+
+# ============== SINGLE FILE ===================
+play_single() {
+    file=$(pick_file) || return
+    mpv --no-video "$file"
+}
+
+# ============== MAIN MENU =====================
+while true; do
+    choice=$(whiptail --menu "🎵 MP3 Player (TUI)" 15 60 4 \
+        "1" "Tek Dosya Çal" \
+        "2" "Çalma Listesi Oluştur" \
+        "3" "Çalma Listesini Çal" \
+        "4" "Çıkış" \
+        3>&1 1>&2 2>&3)
+
+    case "$choice" in
+        1) play_single ;;
+        2) create_playlist ;;
+        3) play_playlist ;;
+        4) break ;;
+    esac
+done

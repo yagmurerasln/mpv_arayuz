@@ -1,62 +1,145 @@
 #!/bin/bash
 
-APP_NAME="MP3 Player (YAD)"
-BIN_NAME="mp3-player-gui"
-INSTALL_PATH="/usr/local/bin/$BIN_NAME"
-DESKTOP_FILE="$HOME/Desktop/mp3-player.desktop"
-PLAYER_SCRIPT="./player.sh"
+#############################################
+# MP3 Player Kurulum Scripti
+# Pardus Linux için otomatik kurulum
+#############################################
 
-# ---- root kontrol ----
-if [ "$EUID" -ne 0 ]; then
-    yad --error --title="$APP_NAME" --text="Bu kurulum root yetkisi ister.\n\nLütfen:\nsudo ./install.sh"
+echo "╔═══════════════════════════════════════════╗"
+echo "║   MP3 Player Kurulum Scripti              ║"
+echo "║   Pardus Linux için                       ║"
+echo "╚═══════════════════════════════════════════╝"
+echo ""
+
+# Root kontrolü
+if [ "$EUID" -eq 0 ]; then 
+    echo "⚠️  Bu scripti root olarak çalıştırmayın!"
+    echo "   Normal kullanıcı ile çalıştırın, sudo şifreniz istenecektir."
     exit 1
 fi
 
-# ---- player script var mı ----
-if [ ! -f "$PLAYER_SCRIPT" ]; then
-    yad --error --title="$APP_NAME" --text="player.sh bulunamadı!\nInstaller ile aynı klasörde olmalı."
+# İşletim sistemi kontrolü
+echo "📋 Sistem kontrolü yapılıyor..."
+if [ -f /etc/pardus-release ]; then
+    echo "✅ Pardus Linux tespit edildi!"
+elif [ -f /etc/debian_version ]; then
+    echo "⚠️  Debian tabanlı sistem tespit edildi."
+    echo "   Pardus değil ama çalışması bekleniyor."
+else
+    echo "❌ Desteklenmeyen işletim sistemi!"
+    echo "   Bu script Pardus/Debian tabanlı sistemler için tasarlanmıştır."
     exit 1
 fi
 
-# ---- progress gui ----
-(
-echo "10"; sleep 0.3
-echo "# Gerekli paketler kontrol ediliyor..."
+echo ""
+echo "📦 Bağımlılıklar kontrol ediliyor..."
 
-apt update -y >/dev/null 2>&1
+# Bağımlılık kontrolü
+MISSING_PACKAGES=""
 
-echo "30"; sleep 0.3
-echo "# mpv ve yad kuruluyor..."
-apt install -y mpv yad >/dev/null 2>&1
+if ! command -v yad &> /dev/null; then
+    MISSING_PACKAGES="$MISSING_PACKAGES yad"
+fi
 
-echo "60"; sleep 0.3
-echo "# Player sisteme kopyalanıyor..."
-cp "$PLAYER_SCRIPT" "$INSTALL_PATH"
-chmod +x "$INSTALL_PATH"
+if ! command -v mpg123 &> /dev/null; then
+    MISSING_PACKAGES="$MISSING_PACKAGES mpg123"
+fi
 
-echo "80"; sleep 0.3
-echo "# Masaüstü kısayolu oluşturuluyor..."
+if ! command -v whiptail &> /dev/null; then
+    MISSING_PACKAGES="$MISSING_PACKAGES whiptail"
+fi
 
-cat <<EOF > "$DESKTOP_FILE"
-[Desktop Entry]
-Type=Application
-Name=MP3 Player
-Exec=$INSTALL_PATH
-Icon=multimedia-player
-Terminal=false
-Categories=Audio;Music;
-EOF
+# Eksik paketleri yükle
+if [ -n "$MISSING_PACKAGES" ]; then
+    echo "📥 Eksik paketler yükleniyor:$MISSING_PACKAGES"
+    echo ""
+    
+    sudo apt update
+    
+    if sudo apt install -y $MISSING_PACKAGES; then
+        echo "✅ Bağımlılıklar başarıyla yüklendi!"
+    else
+        echo "❌ Paket yüklemesi başarısız!"
+        echo "   Manuel olarak deneyin: sudo apt install$MISSING_PACKAGES"
+        exit 1
+    fi
+else
+    echo "✅ Tüm bağımlılıklar zaten yüklü!"
+fi
 
-chmod +x "$DESKTOP_FILE"
+echo ""
+echo "🔧 Scriptler yapılandırılıyor..."
 
-echo "100"; sleep 0.3
-echo "# Kurulum tamamlandı"
-) | yad --progress \
-    --title="$APP_NAME Kurulumu" \
-    --width=420 \
-    --auto-close \
-    --auto-kill
+# Çalıştırma izinlerini ver
+if [ -f "mp3player-gui.sh" ]; then
+    chmod +x mp3player-gui.sh
+    echo "✅ mp3player-gui.sh çalıştırılabilir yapıldı"
+else
+    echo "⚠️  mp3player-gui.sh bulunamadı!"
+fi
 
-yad --info \
-    --title="$APP_NAME" \
-    --text="✅ Kurulum başarılı!\n\n• Menüden veya masaüstünden çalıştırabilirsin.\n• Komut satırı: mp3-player-gui"
+if [ -f "mp3player-tui.sh" ]; then
+    chmod +x mp3player-tui.sh
+    echo "✅ mp3player-tui.sh çalıştırılabilir yapıldı"
+else
+    echo "⚠️  mp3player-tui.sh bulunamadı!"
+fi
+
+echo ""
+echo "🎵 Test yapılıyor..."
+
+# mpg123 testi
+if mpg123 --version &> /dev/null; then
+    echo "✅ mpg123 çalışıyor ($(mpg123 --version 2>&1 | head -n1))"
+else
+    echo "❌ mpg123 testi başarısız!"
+fi
+
+# YAD testi
+if yad --version &> /dev/null; then
+    echo "✅ YAD çalışıyor ($(yad --version))"
+else
+    echo "❌ YAD testi başarısız!"
+fi
+
+# Whiptail testi
+if whiptail --version &> /dev/null; then
+    echo "✅ Whiptail çalışıyor"
+else
+    echo "❌ Whiptail testi başarısız!"
+fi
+
+echo ""
+echo "╔═══════════════════════════════════════════╗"
+echo "║   ✅ KURULUM TAMAMLANDI!                  ║"
+echo "╚═══════════════════════════════════════════╝"
+echo ""
+echo "📖 Kullanım:"
+echo ""
+echo "   GUI versiyonu için:"
+echo "   ./mp3player-gui.sh"
+echo ""
+echo "   TUI versiyonu için:"
+echo "   ./mp3player-tui.sh"
+echo ""
+echo "💡 İpucu: Masaüstü kısayolu oluşturmak isterseniz:"
+echo "   Uygulama menüsüne sağ tıklayıp 'Menüyü Düzenle' seçeneğini kullanabilirsiniz."
+echo ""
+echo "🎉 İyi eğlenceler!"
+echo ""
+
+# Kullanıcıya seçenek sun
+read -p "Şimdi GUI versiyonunu başlatmak ister misiniz? (e/h): " choice
+case "$choice" in
+    e|E|evet|EVET)
+        echo ""
+        echo "🚀 GUI başlatılıyor..."
+        sleep 1
+        ./mp3player-gui.sh
+        ;;
+    *)
+        echo "👋 Kurulum tamamlandı. İyi günler!"
+        ;;
+esac
+
+exit 0
