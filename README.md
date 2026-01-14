@@ -196,5 +196,6 @@ ekran.
 ---
 
 ## Tanıtım Videosu
+https://youtu.be/gURrdox8__0
 
 ---
