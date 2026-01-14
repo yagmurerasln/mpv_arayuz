@@ -41,9 +41,10 @@ if ! command -v yad &> /dev/null; then
     MISSING_PACKAGES="$MISSING_PACKAGES yad"
 fi
 
-if ! command -v mpg123 &> /dev/null; then
-    MISSING_PACKAGES="$MISSING_PACKAGES mpg123"
+if ! command -v mpv &> /dev/null; then
+    MISSING_PACKAGES="$MISSING_PACKAGES mpv"
 fi
+
 
 if ! command -v whiptail &> /dev/null; then
     MISSING_PACKAGES="$MISSING_PACKAGES whiptail"
@@ -88,11 +89,11 @@ fi
 echo ""
 echo "🎵 Test yapılıyor..."
 
-# mpg123 testi
-if mpg123 --version &> /dev/null; then
-    echo "✅ mpg123 çalışıyor ($(mpg123 --version 2>&1 | head -n1))"
+# mpv testi
+if mpv --version &> /dev/null; then
+    echo "✅ mpv çalışıyor ($(mpv --version | head -n1))"
 else
-    echo "❌ mpg123 testi başarısız!"
+    echo "❌ mpv testi başarısız!"
 fi
 
 # YAD testi
