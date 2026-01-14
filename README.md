@@ -108,15 +108,89 @@ Kurulum scripti aşağıdaki işlemleri otomatik olarak gerçekleştirir:
 ---
 
 ## Ekran Görüntüleri
+
+Bu bölümde uygulamanın hem **GUI (YAD)** hem de **TUI (Whiptail)** sürümlerine ait
+temel ekran görüntüleri yer almaktadır. Görseller, uygulamanın kullanım akışını
+ve sunduğu özellikleri göstermektedir.
+
+---
+
+### 🎨 GUI (Grafik Arayüz – YAD)
+
+**GUI Ana Menü**  
+Uygulamanın grafik arayüzlü ana menüsü. Kullanıcı buradan tek dosya çalma,
+çalma listesi oluşturma ve playlist oynatma işlemlerini gerçekleştirebilir.
+
 ![GUI Ana Menü](screenshots/guimenu.png)
+
+---
+
+**GUI – Çalma Listesi Oluşturma Menüsü**  
+Kullanıcının çalma listesi oluşturma yöntemini (tek tek şarkı veya klasör bazlı)
+seçtiği ekran.
+
 ![GUI Çalma Listesi Oluşturma Menü](screenshots/guicalmalistsecim.png)
+
+---
+
+**GUI – Tek Dosya Çalma**  
+Tek bir müzik dosyasının seçilerek oynatıldığı ekran.
+
 ![GUI Tek Dosya Çalma](screenshots/guitekdosya.png)
+
+---
+
+**GUI – Klasör ile Çalma Listesi Oluşturma**  
+Seçilen klasör içindeki müzik dosyalarından otomatik olarak çalma listesi
+oluşturulan ekran.
+
 ![GUI Klasör ile Çalma Listesi Oluşturma](screenshots/guicalmalistklasor.png)
+
+---
+
+**GUI – Çalma Listesi Çalma**  
+Oluşturulan çalma listesinin oynatıldığı, şarkı bilgisi ve kontrol butonlarının
+gösterildiği ekran.
+
 ![GUI Çalma Listesi Çalma](screenshots/guicalmalistcal.png)
+
+---
+
+### 💻 TUI (Terminal Arayüz – Whiptail)
+
+**TUI Ana Menü**  
+Terminal tabanlı arayüzün ana menüsü. Kullanıcı menü üzerinden tüm işlemleri
+klavye ile kontrol edebilir.
+
 ![TUI Ana Menü](screenshots/tuimenu.png)
+
+---
+
+**TUI – Çalma Listesi Oluşturma Menüsü**  
+TUI sürümünde çalma listesi oluşturma yönteminin seçildiği ekran.
+
 ![TUI Çalma Listesi Oluşturma Menü](screenshots/tuicalmalistolustur.png)
+
+---
+
+**TUI – Tek Dosya Çalma**  
+Terminal üzerinden tek bir müzik dosyasının seçilip oynatıldığı ekran.
+
 ![TUI Tek Dosya Çalma](screenshots/tuitekdosya.png)
+
+---
+
+**TUI – Klasör ile Çalma Listesi Oluşturma**  
+Seçilen klasör içerisindeki müzik dosyalarından playlist oluşturulan ekran.
+
 ![TUI Klasör ile Çalma Listesi Oluşturma](screenshots/tuicalmalistklasor.png)
+
+---
+
+**TUI – Çalma Listesi Çalma**  
+Oluşturulan çalma listesinin terminal üzerinden oynatıldığı ve kontrol edildiği
+ekran.
+
 ![TUI Çalma Listesi Çalma](screenshots/tuicalmalistcal.png)
 
 ---

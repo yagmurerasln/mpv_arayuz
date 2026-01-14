@@ -19,6 +19,7 @@ PLAYER_PID=""
 CURRENT_PLAYLIST="/tmp/mp3player_playlist_$$.txt"
 CONTROL_FIFO="/tmp/mp3player_control_$$.fifo"
 
+
 SUPPORTED_FORMATS="*.mp3 *.m4a *.flac *.aac *.ogg *.wav *.wma *.opus"
 
 DESKTOP_DIR="$HOME/Desktop"
@@ -110,17 +111,7 @@ play_playlist() {
     CURRENT_INDEX=1
     PAUSED=0
 
-    # Arka planda şarkı takip edici
-    (
-        while true; do
-            if [ -n "$PLAYER_PID" ] && ! kill -0 "$PLAYER_PID" 2>/dev/null && [ "$PAUSED" -eq 0 ]; then
-                echo "NEXT" > "$CONTROL_FIFO"
-            fi
-            sleep 0.5
-        done
-    ) &
-    WATCHER_PID=$!
-
+   
     while true; do
         song="$(basename "${PLAYLIST[$((CURRENT_INDEX-1))]}" | sed 's/\.[^.]*$//')"
 
@@ -129,16 +120,17 @@ play_playlist() {
 
         # Yeni şarkı başlat
         if [ -z "$PLAYER_PID" ] || ! kill -0 "$PLAYER_PID" 2>/dev/null; then
-            mpv --no-video --quiet --audio-device=pipewire --playlist="$CURRENT_PLAYLIST" --playlist-start=$((CURRENT_INDEX-1)) &
-
-
+           mpv --no-video --quiet --audio-device=pipewire \
+--playlist="$CURRENT_PLAYLIST" \
+--playlist-start=$((CURRENT_INDEX-1)) \
+--term-status-msg='${media-title}' &
             PLAYER_PID=$!
             PAUSED=0
         fi
 
         # GUI durumunu güncelle
         if [ "$PAUSED" -eq 1 ]; then
-            STATUS_TEXT="⏸ DURAKLATILDI"song
+            STATUS_TEXT="⏸ DURAKLATILDI"
         else
             STATUS_TEXT="▶️ ÇALIYOR"
         fi
@@ -149,11 +141,13 @@ play_playlist() {
   --title="🎵 MP3 Player" \
   --wrap \
   --text="$STATUS_TEXT\n\nŞarkı:\n$song\n\n($CURRENT_INDEX / $total)" \
-  --button="⏭ Sonraki:0" \
-  --button="⏸ Duraklat:1" \
-  --button="▶️ Devam:2" \
-  --button="❌ Çıkış:252" \
-  --width=420 --height=180
+--button="⏮ Önceki:3" \
+--button="⏭ Sonraki:0" \
+--button="⏸ Duraklat:1" \
+--button="▶️ Devam:2" \
+--button="❌ Çıkış:252" \
+--width=520 --height=220
+
 
             
             echo "BTN:$?" > "$CONTROL_FIFO"
@@ -169,37 +163,38 @@ play_playlist() {
 
         # Komutu işle
         case "$cmd" in
-            "NEXT")
-                # Otomatik geçiş
-                PLAYER_PID=""
-                ((CURRENT_INDEX++))
-                [ "$CURRENT_INDEX" -gt "$total" ] && CURRENT_INDEX=1
-                ;;
-            "BTN:0")
-                # Sonraki butonu
-                stop_music
-                PAUSED=0
-                ((CURRENT_INDEX++))
-                [ "$CURRENT_INDEX" -gt "$total" ] && CURRENT_INDEX=1
-                ;;
-            "BTN:1")
-                # Duraklat
-                pause_music
-                PAUSED=1
-                ;;
-            "BTN:2")
-                # Devam
-                resume_music
-                PAUSED=0
-                ;;
-            "BTN:252")
-                # Çıkış
-                stop_music
-                kill "$WATCHER_PID" 2>/dev/null
-                rm -f "$CONTROL_FIFO"
-                return
-                ;;
-        esac
+    "BTN:0")
+        # Sonraki butonu
+        stop_music
+        PAUSED=0
+        ((CURRENT_INDEX++))
+        [ "$CURRENT_INDEX" -gt "$total" ] && CURRENT_INDEX=1
+        ;;
+    "BTN:1")
+        # Duraklat
+        pause_music
+        PAUSED=1
+        ;;
+    "BTN:2")
+        # Devam
+        resume_music
+        PAUSED=0
+        ;;
+    "BTN:3")
+        # Önceki butonu
+        stop_music
+        PAUSED=0
+        ((CURRENT_INDEX--))
+        [ "$CURRENT_INDEX" -lt 1 ] && CURRENT_INDEX=$total
+        ;;
+    "BTN:252")
+        # Çıkış
+        stop_music
+        rm -f "$CONTROL_FIFO"
+        return
+        ;;
+esac
+
     done
 }
 
@@ -214,13 +209,15 @@ play_single_file() {
 main_menu() {
     while true; do
         choice=$(yad --list --radiolist \
-            --title="🎵 MP3 Player" \
-            --column="Seç" --column="İşlem" \
-            TRUE "Tek Dosya Çal" \
-            FALSE "Çalma Listesi Oluştur" \
-            FALSE "Çalma Listesini Çal" \
-            FALSE "Çıkış" \
-            --width=350 --height=300)
+    --title="🎵 MP3 Player" \
+    --column="Seç" --column="İşlem" \
+    --focus-field=2 \
+    TRUE "Tek Dosya Çal" \
+    FALSE "Çalma Listesi Oluştur" \
+    FALSE "Çalma Listesini Çal" \
+    FALSE "Çıkış" \
+    --width=350 --height=300)
+
 
         [ $? -ne 0 ] && break
         action=$(echo "$choice" | cut -d'|' -f2)
